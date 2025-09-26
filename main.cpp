@@ -5,12 +5,12 @@
 #include <fstream>
 #include <memory>
 
-// Definir M_PI si no esta definido
+// Definir M_PI si no está definido
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
 
-// Vector 3D 
+// Vector 3D
 struct Vec3 {
     float x, y, z;
     
@@ -37,7 +37,7 @@ struct Vec3 {
     }
 
     friend Vec3 operator*(float t, const Vec3& v) {
-        return v * t; 
+        return v * t;
     }
 };
 
@@ -57,7 +57,6 @@ struct Color {
                     std::min(1.0f, std::max(0.0f, b)));
     }
     
-    // Convertir a entero para guardar imagen
     int toInt() const {
         int ir = (int)(255 * clamp().r);
         int ig = (int)(255 * clamp().g);
@@ -66,15 +65,220 @@ struct Color {
     }
 };
 
-// Material de un objeto
+// Clase base para texturas
+class Texture {
+public:
+    virtual ~Texture() {}
+    virtual Color sample(float u, float v) const = 0;
+};
+
+// Textura solida (un solo color)
+class SolidTexture : public Texture {
+private:
+    Color color;
+    
+public:
+    SolidTexture(Color c) : color(c) {}
+    
+    Color sample(float u, float v) const override {
+        return color;
+    }
+};
+
+// Textura de tablero de ajedrez
+class CheckerTexture : public Texture {
+private:
+    Color color1, color2;
+    float scale;
+    
+public:
+    CheckerTexture(Color c1, Color c2, float s = 8.0f) 
+        : color1(c1), color2(c2), scale(s) {}
+    
+    Color sample(float u, float v) const override {
+        int checker_u = int(floor(u * scale));
+        int checker_v = int(floor(v * scale));
+        
+        if ((checker_u + checker_v) % 2 == 0) {
+            return color1;
+        } else {
+            return color2;
+        }
+    }
+};
+
+// Textura de ladrillos
+class BrickTexture : public Texture {
+private:
+    Color brick_color, mortar_color;
+    float brick_width, brick_height;
+    float mortar_width;
+    
+public:
+    BrickTexture(Color brick = Color(0.7f, 0.3f, 0.2f), 
+                 Color mortar = Color(0.9f, 0.9f, 0.8f),
+                 float bw = 0.3f, float bh = 0.15f, float mw = 0.02f)
+        : brick_color(brick), mortar_color(mortar), 
+          brick_width(bw), brick_height(bh), mortar_width(mw) {}
+    
+    Color sample(float u, float v) const override {
+        u = u - floor(u);
+        v = v - floor(v);
+        
+        int row = int(v / (brick_height + mortar_width));
+        float row_v = v - row * (brick_height + mortar_width);
+        
+        float offset = (row % 2) * (brick_width + mortar_width) * 0.5f;
+        float adjusted_u = u + offset;
+        adjusted_u = adjusted_u - floor(adjusted_u);
+        
+        if (row_v < mortar_width || row_v > brick_height) {
+            return mortar_color;
+        }
+        
+        int col = int(adjusted_u / (brick_width + mortar_width));
+        float col_u = adjusted_u - col * (brick_width + mortar_width);
+        
+        if (col_u < mortar_width) {
+            return mortar_color;
+        }
+        
+        return brick_color;
+    }
+};
+
+// Textura de madera
+class WoodTexture : public Texture {
+private:
+    Color light_wood, dark_wood;
+    float grain_frequency;
+    
+public:
+    WoodTexture(Color light = Color(0.8f, 0.6f, 0.3f),
+                Color dark = Color(0.5f, 0.3f, 0.1f),
+                float freq = 10.0f)
+        : light_wood(light), dark_wood(dark), grain_frequency(freq) {}
+    
+    Color sample(float u, float v) const override {
+        float center_u = 0.5f;
+        float center_v = 0.5f;
+        float dist = sqrt((u - center_u) * (u - center_u) + (v - center_v) * (v - center_v));
+        
+        float ring = sin(dist * grain_frequency + v * 20.0f) * 0.5f + 0.5f;
+        
+        return light_wood * ring + dark_wood * (1.0f - ring);
+    }
+};
+
+// Textura de metal rayado
+class MetalTexture : public Texture {
+private:
+    Color base_color, scratch_color;
+    float scratch_frequency;
+    
+public:
+    MetalTexture(Color base = Color(0.8f, 0.8f, 0.9f),
+                 Color scratch = Color(0.6f, 0.6f, 0.7f),
+                 float freq = 50.0f)
+        : base_color(base), scratch_color(scratch), scratch_frequency(freq) {}
+    
+    Color sample(float u, float v) const override {
+        float horizontal_scratch = sin(v * scratch_frequency) * 0.5f + 0.5f;
+        float vertical_scratch = sin(u * scratch_frequency * 0.3f) * 0.3f + 0.7f;
+        
+        float scratch_intensity = horizontal_scratch * vertical_scratch;
+        
+        float noise = sin(u * 100.0f) * sin(v * 100.0f) * 0.1f + 0.9f;
+        
+        return base_color * scratch_intensity * noise + scratch_color * (1.0f - scratch_intensity);
+    }
+};
+
+// Textura de hierba
+class GrassTexture : public Texture {
+private:
+    Color grass_color1, grass_color2, dirt_color;
+    
+public:
+    GrassTexture(Color grass1 = Color(0.2f, 0.6f, 0.2f),
+                 Color grass2 = Color(0.3f, 0.8f, 0.3f),
+                 Color dirt = Color(0.4f, 0.2f, 0.1f))
+        : grass_color1(grass1), grass_color2(grass2), dirt_color(dirt) {}
+    
+    Color sample(float u, float v) const override {
+        float pattern1 = sin(u * 20.0f) * sin(v * 20.0f);
+        float pattern2 = sin(u * 50.0f + v * 30.0f) * 0.5f;
+        float pattern3 = sin(u * 100.0f) * sin(v * 80.0f) * 0.3f;
+        
+        float grass_intensity = (pattern1 + pattern2 + pattern3) * 0.5f + 0.5f;
+        
+        Color grass_mix = grass_color1 * grass_intensity + grass_color2 * (1.0f - grass_intensity);
+        
+        if (grass_intensity < 0.2f) {
+            return dirt_color * 0.7f + grass_mix * 0.3f;
+        }
+        
+        return grass_mix;
+    }
+};
+
+// Textura de vidrio
+class GlassTexture : public Texture {
+private:
+    Color base_tint;
+    float pattern_scale;
+    
+public:
+    GlassTexture(Color tint = Color(0.9f, 0.95f, 1.0f), float scale = 10.0f)
+        : base_tint(tint), pattern_scale(scale) {}
+    
+    Color sample(float u, float v) const override {
+        float pattern = sin(u * pattern_scale) * sin(v * pattern_scale) * 0.1f + 0.9f;
+        return base_tint * pattern;
+    }
+};
+
+// Manager de texturas
+class TextureManager {
+private:
+    std::vector<std::unique_ptr<Texture>> textures;
+    
+public:
+    TextureManager() {
+        addTexture(std::make_unique<SolidTexture>(Color(1.0f, 1.0f, 1.0f))); // 0: Blanco
+        addTexture(std::make_unique<BrickTexture>());                          // 1: Ladrillos
+        addTexture(std::make_unique<WoodTexture>());                           // 2: Madera
+        addTexture(std::make_unique<MetalTexture>());                          // 3: Metal
+        addTexture(std::make_unique<GrassTexture>());                          // 4: Césped
+        addTexture(std::make_unique<GlassTexture>());                          // 5: Vidrio
+        addTexture(std::make_unique<CheckerTexture>(Color(0.8f, 0.8f, 0.8f), Color(0.2f, 0.2f, 0.2f))); // 6: Ajedrez
+    }
+    
+    int addTexture(std::unique_ptr<Texture> texture) {
+        int id = textures.size();
+        textures.push_back(std::move(texture));
+        return id;
+    }
+    
+    Color sampleTexture(int texture_id, float u, float v) const {
+        if (texture_id >= 0 && texture_id < textures.size()) {
+            return textures[texture_id]->sample(u, v);
+        }
+        return Color(1.0f, 0.0f, 1.0f); // Magenta para texturas faltantes
+    }
+    
+    size_t getTextureCount() const { return textures.size(); }
+};
+
+// Material con todas las propiedades requeridas
 struct Material {
-    Color albedo;           
-    Color specular;         
-    float reflectivity;     // Qua tanto refleja (0-1)
-    float transparency;     // Qua tanto es transparente (0-1)
-    float refraction_index; // Indice de refraccion
-    float roughness;        // Rugosidad de la superficie
-    int texture_id;         // ID de textura (-1 si no tiene)
+    Color albedo;
+    Color specular;
+    float reflectivity;
+    float transparency;
+    float refraction_index;
+    float roughness;
+    int texture_id;
     
     Material(Color albedo = Color(0.8, 0.8, 0.8), 
              Color specular = Color(0.2, 0.2, 0.2),
@@ -95,7 +299,7 @@ struct Intersection {
     Vec3 point;
     Vec3 normal;
     Material material;
-    Vec3 tex_coords; // Coordenadas de textura (u, v, 0)
+    Vec3 tex_coords;
     
     Intersection() : hit(false), distance(0) {}
     Intersection(float dist, Vec3 p, Vec3 n, Material m, Vec3 tex = Vec3())
@@ -122,7 +326,7 @@ public:
     virtual Intersection intersect(const Ray& ray) const = 0;
 };
 
-// Cubo 
+// Cubo
 class Cube : public Object {
 public:
     Vec3 center;
@@ -184,14 +388,13 @@ private:
     }
     
     Vec3 calculateTexCoords(const Vec3& hit_point, const Vec3& normal) const {
-        // Mapear coordenadas de textura basadas en la cara del cubo
         Vec3 local = hit_point - center;
         
-        if (abs(normal.x) > 0.5) { // Cara X
+        if (abs(normal.x) > 0.5) {
             return Vec3((local.z + size/2) / size, (local.y + size/2) / size, 0);
-        } else if (abs(normal.y) > 0.5) { // Cara Y
+        } else if (abs(normal.y) > 0.5) {
             return Vec3((local.x + size/2) / size, (local.z + size/2) / size, 0);
-        } else { // Cara Z
+        } else {
             return Vec3((local.x + size/2) / size, (local.y + size/2) / size, 0);
         }
     }
@@ -215,7 +418,7 @@ public:
         if (discriminant < 0) return Intersection();
         
         float t = (-b - sqrt(discriminant)) / (2.0f * a);
-        if (t < 0.001f) { // Evitar self-intersection
+        if (t < 0.001f) {
             t = (-b + sqrt(discriminant)) / (2.0f * a);
             if (t < 0.001f) return Intersection();
         }
@@ -263,6 +466,7 @@ private:
     Camera camera;
     int width, height;
     int max_depth;
+    TextureManager texture_manager; // Sistema de texturas
     
 public:
     Raytracer(int w, int h, Camera cam) 
@@ -278,7 +482,6 @@ public:
         Intersection closest;
         closest.distance = std::numeric_limits<float>::max();
         
-        // Encontrar la interseccion más cercana
         for (const auto& obj : objects) {
             Intersection intersection = obj->intersect(ray);
             if (intersection.hit && intersection.distance < closest.distance) {
@@ -294,9 +497,26 @@ public:
     }
     
     Color shade(const Ray& ray, const Intersection& intersection, int depth) const {
-        Color result = intersection.material.albedo * 0.1f; // Luz ambiente
+        Color base_color = intersection.material.albedo;
         
-        // Reflexion
+        // Aplicar textura si existe
+        if (intersection.material.texture_id >= 0) {
+            Color texture_color = texture_manager.sampleTexture(
+                intersection.material.texture_id, 
+                intersection.tex_coords.x, 
+                intersection.tex_coords.y
+            );
+            base_color = base_color * texture_color;
+        }
+        
+        Color result = base_color * 0.3f; // Luz ambiente
+        
+        // Luz direccional simple
+        Vec3 light_dir = Vec3(0.5f, 1.0f, 0.3f).normalize();
+        float light_intensity = std::max(0.0f, intersection.normal.dot(light_dir));
+        result = result + base_color * light_intensity * 0.7f;
+        
+        // Reflexión
         if (intersection.material.reflectivity > 0) {
             Vec3 reflect_dir = ray.direction.reflect(intersection.normal);
             Ray reflect_ray(intersection.point + intersection.normal * 0.001f, reflect_dir);
@@ -308,7 +528,6 @@ public:
     }
     
     Color getSkyboxColor(const Vec3& direction) const {
-        // Gradiente simple de cielo
         float t = 0.5f * (direction.y + 1.0f);
         return Color(0.5f, 0.7f, 1.0f) * (1.0f - t) + Color(1.0f, 1.0f, 1.0f) * t;
     }
@@ -327,7 +546,6 @@ public:
                 framebuffer[y * width + x] = color;
             }
             
-            // Mostrar progreso
             if (y % 50 == 0) {
                 std::cout << "Renderizando línea " << y << "/" << height << std::endl;
             }
@@ -355,32 +573,102 @@ int main() {
     const int WIDTH = 800;
     const int HEIGHT = 600;
     
-    // Crear camara
-    Camera camera(Vec3(5, 3, 8), Vec3(0, 0, 0), Vec3(0, 1, 0), 60.0f, float(WIDTH) / HEIGHT);
+    // Crear camara para ver la escena
+    Camera camera(Vec3(8, 5, 12), Vec3(0, 0, 0), Vec3(0, 1, 0), 50.0f, float(WIDTH) / HEIGHT);
     
     // Crear raytracer
     Raytracer raytracer(WIDTH, HEIGHT, camera);
     
-    // Crear escena con diferentes materiales
+    // Material 1: LADRILLO
+    Material brick_material(
+        Color(1.0f, 1.0f, 1.0f),  // Base blanca
+        Color(0.1f, 0.1f, 0.1f),  // Especular bajo
+        0.05f,                    // Poca reflexión
+        0.0f,                     // No transparente
+        1.0f,                     // Indice refraccion normal
+        0.9f,                     // Rugoso
+        1                         // ID textura ladrillo
+    );
     
-    // Material piedra
-    Material stone(Color(0.5f, 0.5f, 0.5f), Color(0.1f, 0.1f, 0.1f), 0.1f);
+    // Material 2: MADERA
+    Material wood_material(
+        Color(1.0f, 1.0f, 1.0f),
+        Color(0.2f, 0.1f, 0.05f),
+        0.1f,
+        0.0f,
+        1.0f,
+        0.8f,
+        2  // ID textura madera
+    );
     
-    // Material metal
-    Material metal(Color(0.7f, 0.7f, 0.8f), Color(0.8f, 0.8f, 0.9f), 0.8f);
+    // Material 3: METAL
+    Material metal_material(
+        Color(1.0f, 1.0f, 1.0f),
+        Color(0.9f, 0.9f, 1.0f),
+        0.8f,
+        0.0f,
+        1.0f,
+        0.1f,
+        3  // ID textura metal
+    );
     
-    // Material vidrio
-    Material glass(Color(0.9f, 0.9f, 1.0f), Color(0.9f, 0.9f, 1.0f), 0.1f, 0.9f, 1.5f);
+    // Material 4: Hierba
+    Material grass_material(
+        Color(1.0f, 1.0f, 1.0f),
+        Color(0.1f, 0.2f, 0.1f),
+        0.02f,
+        0.0f,
+        1.0f,
+        1.0f,
+        4  // ID textura hierba
+    );
     
-    // Agregar objetos a la escena
-    raytracer.addObject(std::make_unique<Cube>(Vec3(0, 0, 0), 1.0f, stone));
-    raytracer.addObject(std::make_unique<Cube>(Vec3(2, 0, 0), 1.0f, metal));
-    raytracer.addObject(std::make_unique<Sphere>(Vec3(-2, 0, 0), 0.5f, glass));
+    // Material 5: VIDRIO
+    Material glass_material(
+        Color(1.0f, 1.0f, 1.0f),
+        Color(0.95f, 0.98f, 1.0f),
+        0.1f,
+        0.85f,
+        1.5f,
+        0.02f,
+        5  // ID textura vidrio
+    );
     
-    // Base
-    raytracer.addObject(std::make_unique<Cube>(Vec3(0, -1.5f, 0), 6.0f, stone));
+    // ================ CREAR DIORAMA ================
     
-    std::cout << "Iniciando renderizado..." << std::endl;
+    // SUELO BASE - Hierba
+    for (int x = -4; x <= 4; x++) {
+        for (int z = -4; z <= 4; z++) {
+            raytracer.addObject(std::make_unique<Cube>(Vec3(x * 2, -1, z * 2), 2.0f, grass_material));
+        }
+    }
+    
+    // CASA PRINCIPAL
+    // Paredes de ladrillo
+    raytracer.addObject(std::make_unique<Cube>(Vec3(0, 1, -2), 2.0f, brick_material));
+    raytracer.addObject(std::make_unique<Cube>(Vec3(-2, 1, 0), 2.0f, brick_material));
+    raytracer.addObject(std::make_unique<Cube>(Vec3(2, 1, 0), 2.0f, brick_material));
+    
+    // Techo de madera
+    raytracer.addObject(std::make_unique<Cube>(Vec3(0, 3, 0), 3.0f, wood_material));
+    
+    // Ventana de vidrio
+    raytracer.addObject(std::make_unique<Cube>(Vec3(0, 1.5f, 1.8f), 0.8f, glass_material));
+    
+    // TORRE METÁLICA
+    raytracer.addObject(std::make_unique<Cube>(Vec3(4, 1, 2), 1.0f, metal_material));
+    raytracer.addObject(std::make_unique<Cube>(Vec3(4, 3, 2), 1.0f, metal_material));
+    raytracer.addObject(std::make_unique<Cube>(Vec3(4, 5, 2), 1.0f, metal_material));
+    
+    // ESTRUCTURA DE MADERA
+    raytracer.addObject(std::make_unique<Cube>(Vec3(-4, 1, -4), 1.5f, wood_material));
+    raytracer.addObject(std::make_unique<Cube>(Vec3(-4, 2.5f, -4), 2.0f, grass_material)); // "Hojas"
+    
+    // OBJETOS DECORATIVOS
+    raytracer.addObject(std::make_unique<Sphere>(Vec3(0, 4, 0), 0.5f, metal_material));
+    raytracer.addObject(std::make_unique<Sphere>(Vec3(-2, 2, 2), 0.7f, glass_material));
+    
+    std::cout << "Iniciando renderizado del diorama con texturas..." << std::endl;
     raytracer.render();
     std::cout << "¡Renderizado completo! Archivo guardado como output.ppm" << std::endl;
     
