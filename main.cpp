@@ -5,12 +5,12 @@
 #include <fstream>
 #include <memory>
 
-// Definir M_PI si no está definido
+// Definir M_PI si no esta definido
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
 
-// Vector 3D básico
+// Vector 3D 
 struct Vec3 {
     float x, y, z;
     
@@ -36,9 +36,8 @@ struct Vec3 {
         return *this - normal * 2.0f * this->dot(normal);
     }
 
-    // Add this new operator after the other operators
     friend Vec3 operator*(float t, const Vec3& v) {
-        return v * t;  // Reuse the existing v * t operator
+        return v * t; 
     }
 };
 
@@ -67,13 +66,13 @@ struct Color {
     }
 };
 
-// Material con todas las propiedades requeridas
+// Material de un objeto
 struct Material {
-    Color albedo;           // Color difuso
-    Color specular;         // Color especular
-    float reflectivity;     // Qué tanto refleja (0-1)
-    float transparency;     // Qué tanto es transparente (0-1)
-    float refraction_index; // Índice de refracción
+    Color albedo;           
+    Color specular;         
+    float reflectivity;     // Qua tanto refleja (0-1)
+    float transparency;     // Qua tanto es transparente (0-1)
+    float refraction_index; // Indice de refraccion
     float roughness;        // Rugosidad de la superficie
     int texture_id;         // ID de textura (-1 si no tiene)
     
@@ -123,7 +122,7 @@ public:
     virtual Intersection intersect(const Ray& ray) const = 0;
 };
 
-// Cubo (la estrella del show para este proyecto)
+// Cubo 
 class Cube : public Object {
 public:
     Vec3 center;
@@ -198,7 +197,7 @@ private:
     }
 };
 
-// Esfera (para variedad)
+// Esfera
 class Sphere : public Object {
 public:
     Vec3 center;
@@ -228,7 +227,7 @@ public:
     }
 };
 
-// Cámara
+// Camara
 struct Camera {
     Vec3 position;
     Vec3 target;
@@ -279,7 +278,7 @@ public:
         Intersection closest;
         closest.distance = std::numeric_limits<float>::max();
         
-        // Encontrar la intersección más cercana
+        // Encontrar la interseccion más cercana
         for (const auto& obj : objects) {
             Intersection intersection = obj->intersect(ray);
             if (intersection.hit && intersection.distance < closest.distance) {
@@ -297,7 +296,7 @@ public:
     Color shade(const Ray& ray, const Intersection& intersection, int depth) const {
         Color result = intersection.material.albedo * 0.1f; // Luz ambiente
         
-        // Reflexión
+        // Reflexion
         if (intersection.material.reflectivity > 0) {
             Vec3 reflect_dir = ray.direction.reflect(intersection.normal);
             Ray reflect_ray(intersection.point + intersection.normal * 0.001f, reflect_dir);
@@ -356,7 +355,7 @@ int main() {
     const int WIDTH = 800;
     const int HEIGHT = 600;
     
-    // Crear cámara
+    // Crear camara
     Camera camera(Vec3(5, 3, 8), Vec3(0, 0, 0), Vec3(0, 1, 0), 60.0f, float(WIDTH) / HEIGHT);
     
     // Crear raytracer
