@@ -10,6 +10,10 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb/stb_image.h"
+
+
 // Vector 3D
 struct Vec3 {
     float x, y, z;
@@ -170,6 +174,25 @@ public:
     }
 };
 
+//Textura de piedra
+class StoneTexture : public Texture {
+private:
+    Color stone_light, stone_dark;
+    
+public:
+    StoneTexture(Color light = Color(0.7f, 0.7f, 0.7f),
+                 Color dark = Color(0.4f, 0.4f, 0.4f))
+        : stone_light(light), stone_dark(dark) {}
+    
+    Color sample(float u, float v) const override {
+        float noise1 = sin(u * 50.0f) * sin(v * 50.0f);
+        float noise2 = sin(u * 100.0f + v * 80.0f) * 0.5f;
+        float pattern = (noise1 + noise2) * 0.5f + 0.5f;
+        
+        return stone_light * pattern + stone_dark * (1.0f - pattern);
+    }
+};
+
 // Textura de metal rayado
 class MetalTexture : public Texture {
 private:
@@ -222,6 +245,26 @@ public:
     }
 };
 
+//Textura de hojas
+class LeavesTexture : public Texture {
+private:
+    Color leaf_bright, leaf_dark;
+    
+public:
+    LeavesTexture(Color bright = Color(0.3f, 0.8f, 0.2f),
+                  Color dark = Color(0.1f, 0.5f, 0.1f))
+        : leaf_bright(bright), leaf_dark(dark) {}
+    
+    Color sample(float u, float v) const override {
+        float pixelated_u = floor(u * 16.0f) / 16.0f;
+        float pixelated_v = floor(v * 16.0f) / 16.0f;
+        
+        float pattern = sin(pixelated_u * 100.0f) * sin(pixelated_v * 80.0f) * 0.5f + 0.5f;
+        
+        return leaf_bright * pattern + leaf_dark * (1.0f - pattern);
+    }
+};
+
 // Textura de vidrio
 class GlassTexture : public Texture {
 private:
@@ -238,6 +281,104 @@ public:
     }
 };
 
+class ImageTexture : public Texture {
+private:
+    std::vector<Color> image_data;
+    int image_width, image_height;
+    bool loaded;
+    
+public:
+    ImageTexture(const std::string& filename) : loaded(false) {
+        loadImage(filename);
+    }
+    
+    bool loadImage(const std::string& filename) {
+        int channels;
+        unsigned char* data = stbi_load(filename.c_str(), &image_width, &image_height, &channels, 3);
+        
+        if (!data) {
+            std::cout << "Error: No se pudo cargar la imagen " << filename << std::endl;
+            return false;
+        }
+        
+        std::cout << "Imagen cargada: " << filename << " (" << image_width << "x" << image_height << ")" << std::endl;
+        
+        // Convertir datos de imagen a nuestro formato Color
+        image_data.resize(image_width * image_height);
+        
+        for (int i = 0; i < image_width * image_height; i++) {
+            float r = data[i * 3 + 0] / 255.0f;
+            float g = data[i * 3 + 1] / 255.0f;  
+            float b = data[i * 3 + 2] / 255.0f;
+            image_data[i] = Color(r, g, b);
+        }
+        
+        stbi_image_free(data);
+        loaded = true;
+        return true;
+    }
+    
+    Color sample(float u, float v) const override {
+        if (!loaded || image_data.empty()) {
+            return Color(1.0f, 0.0f, 1.0f); // Magenta si no se cargó
+        }
+        
+        // Asegurar que u y v estén en rango [0,1]
+        u = u - floor(u);
+        v = v - floor(v);
+        
+        // Para texturas de Minecraft, usar nearest neighbor (sin interpolación)
+        int x = int(u * image_width) % image_width;
+        int y = int(v * image_height) % image_height;
+        
+        // Invertir Y porque las imágenes suelen estar al revés
+        y = image_height - 1 - y;
+        
+        int index = y * image_width + x;
+        return image_data[index];
+    }
+    
+    // Versión con interpolación bilinear (opcional, para texturas más suaves)
+    Color sampleBilinear(float u, float v) const {
+        if (!loaded || image_data.empty()) {
+            return Color(1.0f, 0.0f, 1.0f);
+        }
+        
+        u = u - floor(u);
+        v = v - floor(v);
+        
+        float fx = u * image_width;
+        float fy = v * image_height;
+        
+        int x1 = int(fx) % image_width;
+        int y1 = int(fy) % image_height;
+        int x2 = (x1 + 1) % image_width;
+        int y2 = (y1 + 1) % image_height;
+        
+        float dx = fx - floor(fx);
+        float dy = fy - floor(fy);
+        
+        // Invertir Y
+        y1 = image_height - 1 - y1;
+        y2 = image_height - 1 - y2;
+        
+        Color c11 = image_data[y1 * image_width + x1];
+        Color c21 = image_data[y1 * image_width + x2]; 
+        Color c12 = image_data[y2 * image_width + x1];
+        Color c22 = image_data[y2 * image_width + x2];
+        
+        // Interpolación bilinear
+        Color c1 = c11 * (1.0f - dx) + c21 * dx;
+        Color c2 = c12 * (1.0f - dx) + c22 * dx;
+        
+        return c1 * (1.0f - dy) + c2 * dy;
+    }
+    
+    bool isLoaded() const { return loaded; }
+    int getWidth() const { return image_width; }
+    int getHeight() const { return image_height; }
+};
+
 // Manager de texturas
 class TextureManager {
 private:
@@ -245,19 +386,32 @@ private:
     
 public:
     TextureManager() {
-        addTexture(std::make_unique<SolidTexture>(Color(1.0f, 1.0f, 1.0f))); // 0: Blanco
-        addTexture(std::make_unique<BrickTexture>());                          // 1: Ladrillos
-        addTexture(std::make_unique<WoodTexture>());                           // 2: Madera
-        addTexture(std::make_unique<MetalTexture>());                          // 3: Metal
-        addTexture(std::make_unique<GrassTexture>());                          // 4: Césped
-        addTexture(std::make_unique<GlassTexture>());                          // 5: Vidrio
-        addTexture(std::make_unique<CheckerTexture>(Color(0.8f, 0.8f, 0.8f), Color(0.2f, 0.2f, 0.2f))); // 6: Ajedrez
+        // CARGAR TEXTURAS DE IMAGEN
+        loadImageTexture("textures/leaves.png");    // 0: Hojas de Minecraft
+        loadImageTexture("textures/stone.png");     // 1: Piedra 
+        loadImageTexture("textures/wood.png");      // 2: Tronco de madera
+        loadImageTexture("textures/planks.png");    // 3: Tablones de madera
+        loadImageTexture("textures/glass.jpg");     // 4: Vidrio
+        loadImageTexture("textures/brick.png");     // 5: Ladrillos 
+        loadImageTexture("textures/grass.png");     // 6: Hierba
     }
     
     int addTexture(std::unique_ptr<Texture> texture) {
         int id = textures.size();
         textures.push_back(std::move(texture));
         return id;
+    }
+    
+    int loadImageTexture(const std::string& filename) {
+        auto imageTexture = std::make_unique<ImageTexture>(filename);
+        
+        if (!imageTexture->isLoaded()) {
+            std::cout << "Advertencia: No se pudo cargar " << filename << ", usando textura por defecto" << std::endl;
+            // Usar textura por defecto si falla la carga
+            return addTexture(std::make_unique<SolidTexture>(Color(0.5f, 0.5f, 0.5f)));
+        }
+        
+        return addTexture(std::move(imageTexture));
     }
     
     Color sampleTexture(int texture_id, float u, float v) const {
@@ -574,23 +728,31 @@ int main() {
     const int HEIGHT = 600;
     
     // Crear camara para ver la escena
-    Camera camera(Vec3(8, 5, 12), Vec3(0, 0, 0), Vec3(0, 1, 0), 50.0f, float(WIDTH) / HEIGHT);
+    Camera camera(Vec3(20, 5, 12), Vec3(0, 0, 0), Vec3(0, 2, 0), 50.0f, float(WIDTH) / HEIGHT);
     
     // Crear raytracer
     Raytracer raytracer(WIDTH, HEIGHT, camera);
     
-    // Material 1: LADRILLO
-    Material brick_material(
-        Color(1.0f, 1.0f, 1.0f),  // Base blanca
-        Color(0.1f, 0.1f, 0.1f),  // Especular bajo
-        0.05f,                    // Poca reflexión
-        0.0f,                     // No transparente
-        1.0f,                     // Indice refraccion normal
-        0.9f,                     // Rugoso
-        1                         // ID textura ladrillo
+    Material leaves_material(
+        Color(1.0f, 1.0f, 1.0f),
+        Color(0.1f, 0.3f, 0.1f),
+        0.02f,
+        0.0f,
+        1.0f,
+        0.9f,
+        0   // Updated ID for leaves texture
     );
-    
-    // Material 2: MADERA
+
+    Material stone_material(
+        Color(1.0f, 1.0f, 1.0f),
+        Color(0.2f, 0.2f, 0.2f),
+        0.05f,
+        0.0f,
+        1.0f,
+        0.9f,
+        1   // Updated ID for stone texture
+    );
+
     Material wood_material(
         Color(1.0f, 1.0f, 1.0f),
         Color(0.2f, 0.1f, 0.05f),
@@ -598,32 +760,19 @@ int main() {
         0.0f,
         1.0f,
         0.8f,
-        2  // ID textura madera
+        2   // Updated ID for wood texture
     );
-    
-    // Material 3: METAL
-    Material metal_material(
+
+    Material planks_material(
         Color(1.0f, 1.0f, 1.0f),
-        Color(0.9f, 0.9f, 1.0f),
-        0.8f,
-        0.0f,
-        1.0f,
+        Color(0.2f, 0.1f, 0.05f),
         0.1f,
-        3  // ID textura metal
-    );
-    
-    // Material 4: Hierba
-    Material grass_material(
-        Color(1.0f, 1.0f, 1.0f),
-        Color(0.1f, 0.2f, 0.1f),
-        0.02f,
         0.0f,
         1.0f,
-        1.0f,
-        4  // ID textura hierba
+        0.8f,
+        3   // Updated ID for planks texture
     );
-    
-    // Material 5: VIDRIO
+
     Material glass_material(
         Color(1.0f, 1.0f, 1.0f),
         Color(0.95f, 0.98f, 1.0f),
@@ -631,42 +780,47 @@ int main() {
         0.85f,
         1.5f,
         0.02f,
-        5  // ID textura vidrio
+        4   // Updated ID for glass texture
+    );
+
+    Material brick_material(
+        Color(1.0f, 1.0f, 1.0f),
+        Color(0.1f, 0.1f, 0.1f),
+        0.05f,
+        0.0f,
+        1.0f,
+        0.9f,
+        5   // Updated ID for brick texture
     );
     
+    Material grass_material(
+        Color(1.0f, 1.0f, 1.0f),  // Using base color instead of texture
+        Color(0.1f, 0.1f, 0.1f),
+        0.02f,
+        0.0f,
+        1.0f,
+        1.0f,
+        6  // No texture for grass
+    );
+
     // ================ CREAR DIORAMA ================
     
     // SUELO BASE - Hierba
     for (int x = -4; x <= 4; x++) {
         for (int z = -4; z <= 4; z++) {
-            raytracer.addObject(std::make_unique<Cube>(Vec3(x * 2, -1, z * 2), 2.0f, grass_material));
+            raytracer.addObject(std::make_unique<Cube>(Vec3(x * 2, 0, z * 2), 2.0f, grass_material));
         }
     }
     
-    // CASA PRINCIPAL
-    // Paredes de ladrillo
-    raytracer.addObject(std::make_unique<Cube>(Vec3(0, 1, -2), 2.0f, brick_material));
-    raytracer.addObject(std::make_unique<Cube>(Vec3(-2, 1, 0), 2.0f, brick_material));
-    raytracer.addObject(std::make_unique<Cube>(Vec3(2, 1, 0), 2.0f, brick_material));
+    //PRUEBA DE TEXTURAS
+    raytracer.addObject(std::make_unique<Cube>(Vec3(-2, 2, 0), 2.0f, brick_material));
+    raytracer.addObject(std::make_unique<Cube>(Vec3(0, 2, 0), 2.0f, glass_material));
+    raytracer.addObject(std::make_unique<Cube>(Vec3(2, 2, 0), 2.0f, leaves_material));
+    raytracer.addObject(std::make_unique<Cube>(Vec3(4, 2, 0), 2.0f, stone_material));
+    raytracer.addObject(std::make_unique<Cube>(Vec3(6, 2, 0), 2.0f, planks_material));
+    raytracer.addObject(std::make_unique<Cube>(Vec3(8, 2, 0), 2.0f, wood_material));
+    raytracer.addObject(std::make_unique<Sphere>(Vec3(10, 2, 0), 2.0f, grass_material));
     
-    // Techo de madera
-    raytracer.addObject(std::make_unique<Cube>(Vec3(0, 3, 0), 3.0f, wood_material));
-    
-    // Ventana de vidrio
-    raytracer.addObject(std::make_unique<Cube>(Vec3(0, 1.5f, 1.8f), 0.8f, glass_material));
-    
-    // TORRE METÁLICA
-    raytracer.addObject(std::make_unique<Cube>(Vec3(4, 1, 2), 1.0f, metal_material));
-    raytracer.addObject(std::make_unique<Cube>(Vec3(4, 3, 2), 1.0f, metal_material));
-    raytracer.addObject(std::make_unique<Cube>(Vec3(4, 5, 2), 1.0f, metal_material));
-    
-    // ESTRUCTURA DE MADERA
-    raytracer.addObject(std::make_unique<Cube>(Vec3(-4, 1, -4), 1.5f, wood_material));
-    raytracer.addObject(std::make_unique<Cube>(Vec3(-4, 2.5f, -4), 2.0f, grass_material)); // "Hojas"
-    
-    // OBJETOS DECORATIVOS
-    raytracer.addObject(std::make_unique<Sphere>(Vec3(0, 4, 0), 0.5f, metal_material));
-    raytracer.addObject(std::make_unique<Sphere>(Vec3(-2, 2, 2), 0.7f, glass_material));
     
     std::cout << "Iniciando renderizado del diorama con texturas..." << std::endl;
     raytracer.render();
