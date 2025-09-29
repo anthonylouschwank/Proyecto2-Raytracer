@@ -729,7 +729,7 @@ int main() {
     
     // Crear camara para ver la escena
     Camera camera(Vec3(10, 10, 24), Vec3(-2, -2, 0), Vec3(0, 7, 0), 100.0f, float(WIDTH) / HEIGHT);
-    
+
     // Crear raytracer
     Raytracer raytracer(WIDTH, HEIGHT, camera);
     
