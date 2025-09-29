@@ -728,7 +728,7 @@ int main() {
     const int HEIGHT = 600;
     
     // Crear camara para ver la escena
-    Camera camera(Vec3(20, 5, 12), Vec3(0, 0, 0), Vec3(0, 2, 0), 50.0f, float(WIDTH) / HEIGHT);
+    Camera camera(Vec3(10, 10, 24), Vec3(-2, -2, 0), Vec3(0, 7, 0), 100.0f, float(WIDTH) / HEIGHT);
     
     // Crear raytracer
     Raytracer raytracer(WIDTH, HEIGHT, camera);
@@ -806,21 +806,131 @@ int main() {
     // ================ CREAR DIORAMA ================
     
     // SUELO BASE - Hierba
-    for (int x = -4; x <= 4; x++) {
-        for (int z = -4; z <= 4; z++) {
+    for (int x = -5; x <= 6; x++) {
+        for (int z = -5; z <= 6; z++) {
             raytracer.addObject(std::make_unique<Cube>(Vec3(x * 2, 0, z * 2), 2.0f, grass_material));
         }
     }
     
-    //PRUEBA DE TEXTURAS
-    raytracer.addObject(std::make_unique<Cube>(Vec3(-2, 2, 0), 2.0f, brick_material));
-    raytracer.addObject(std::make_unique<Cube>(Vec3(0, 2, 0), 2.0f, glass_material));
-    raytracer.addObject(std::make_unique<Cube>(Vec3(2, 2, 0), 2.0f, leaves_material));
-    raytracer.addObject(std::make_unique<Cube>(Vec3(4, 2, 0), 2.0f, stone_material));
-    raytracer.addObject(std::make_unique<Cube>(Vec3(6, 2, 0), 2.0f, planks_material));
-    raytracer.addObject(std::make_unique<Cube>(Vec3(8, 2, 0), 2.0f, wood_material));
-    raytracer.addObject(std::make_unique<Sphere>(Vec3(10, 2, 0), 2.0f, grass_material));
+    //Pilar Izquierdo frente (tronco)
+    for (int y = 1; y <= 4; y++) {
+        raytracer.addObject(std::make_unique<Cube>(Vec3(-8, y * 2, 2), 2.0f, wood_material));
+    }
+
+    //Pilar Derecho frente (tronco)
+    for (int y = 1; y <= 4; y++) {
+        raytracer.addObject(std::make_unique<Cube>(Vec3(2, y * 2, 2), 2.0f, wood_material));
+    }
+
+    //Pilar Derecho Atras (tronco)
+    for (int y = 1; y <= 4; y++) {
+        raytracer.addObject(std::make_unique<Cube>(Vec3(-8, y * 2, -8), 2.0f, wood_material));
+    }
+
+    //Pilar Izquierda Atras (tronco)
+    for (int y = 1; y <= 4; y++) {
+        raytracer.addObject(std::make_unique<Cube>(Vec3(2, y * 2, -8), 2.0f, wood_material));
+    }
     
+    //Base pierda frontal
+    for (int x = -3; x <= -1; x++) {
+        raytracer.addObject(std::make_unique<Cube>(Vec3(x * 2, 2, 2), 2.0f, stone_material));
+    }
+
+    //Base piedra trasera
+    for (int x = -3; x <= 1; x++) {
+        raytracer.addObject(std::make_unique<Cube>(Vec3(x * 2, 2, -8), 2.0f, stone_material));
+    }
+
+    //Base piedra lateral derecha
+    for (int z = -3; z <= 1; z++) {
+        raytracer.addObject(std::make_unique<Cube>(Vec3(2, 2, z * 2), 2.0f, stone_material));
+    }
+
+    //Base piedra lateral izquierda
+    for (int z = -3; z <= 1; z++) {
+        raytracer.addObject(std::make_unique<Cube>(Vec3(-8, 2, z * 2), 2.0f, stone_material));
+    }
+
+    // ======================= Pared Ladrillo Frontal =======================
+    for (int y = 2; y <= 3; y++) {
+        raytracer.addObject(std::make_unique<Cube>(Vec3(-6, y * 2, 2), 2.0f, brick_material));
+    }
+
+    for (int y = 2; y <= 3; y++) {
+        raytracer.addObject(std::make_unique<Cube>(Vec3(-2, y * 2, 2), 2.0f, brick_material));
+    }
+
+    for (int x = -3; x <= 1; x++) {
+        raytracer.addObject(std::make_unique<Cube>(Vec3(x * 2, 8, 2), 2.0f, brick_material));
+    }
+
+    for (int y = 2; y <= 3; y++) {
+        raytracer.addObject(std::make_unique<Cube>(Vec3(-4, y * 2, 2), 2.0f, glass_material));
+    }
+
+    //Pared Ladrillo trasera
+    for (int x = -3; x <= 1; x++) {
+        for (int y = 2; y <= 4; y++) {
+            raytracer.addObject(std::make_unique<Cube>(Vec3(x * 2, y * 2, -8), 2.0f, brick_material));
+        }
+    }
+
+    //Pared Ladrillo lateral izquierda
+    for (int z = -3; z <= 1; z++) {
+        for (int y = 2; y <= 4; y++) {
+            raytracer.addObject(std::make_unique<Cube>(Vec3(-8, y * 2, z * 2), 2.0f, brick_material));
+        }
+    }
+
+    // ======================= Pared Ladrillo lateral derecha =======================
+    for (int z = -3; z <= 1; z++) {
+        raytracer.addObject(std::make_unique<Cube>(Vec3(2, 8, z * 2), 2.0f, brick_material));
+    }
+
+    for (int y = 2; y <= 3; y++) {
+        raytracer.addObject(std::make_unique<Cube>(Vec3(2, y * 2, -6), 2.0f, brick_material));
+    }
+
+    for (int y = 2; y <= 3; y++) {
+        raytracer.addObject(std::make_unique<Cube>(Vec3(2, y * 2, 0), 2.0f, brick_material));
+    }
+
+    for (int z = -3; z <= 1; z++) {        // Incrementar desde -2 hasta 0
+        for (int y = 2; y <= 3; y++) {
+            raytracer.addObject(std::make_unique<Cube>(Vec3(2, y * 2, z * 2), 2.0f, glass_material));
+        }
+    }
+
+    // Techo (tablones de madera)
+    for (int x = -4; x <= 1; x++) {        
+        for (int z = -4; z <= 1; z++) {    
+            raytracer.addObject(std::make_unique<Cube>(Vec3(x * 2, 10, z * 2), 2.0f, planks_material)); 
+        }
+    }
+
+    //Tronco de arbol
+    for (int y = 1; y <= 5; y++) {
+        raytracer.addObject(std::make_unique<Cube>(Vec3(10, y * 2, -2), 2.0f, wood_material));
+    }
+
+    //Tronco de arbol
+    for (int y = 1; y <= 5; y++) {
+        raytracer.addObject(std::make_unique<Cube>(Vec3(10, y * 2, -2), 2.0f, wood_material));
+    }
+
+    // Copa de hojas 
+    for (int x = -1; x <= 1; x++) {        
+        for (int z = -1; z <= 1; z++) {     
+            for (int y = 0; y <= 2; y++) {  
+                raytracer.addObject(std::make_unique<Cube>(
+                    Vec3(10 + x * 2, 12 + y * 2, -2 + z * 2), 
+                    2.0f, 
+                    leaves_material
+                ));
+            }
+        }
+    }
     
     std::cout << "Iniciando renderizado del diorama con texturas..." << std::endl;
     raytracer.render();
